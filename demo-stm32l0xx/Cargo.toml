@@ -1,0 +1,15 @@
+[package]
+name = "demo-stm32l0xx"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonasschievink@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+publish = false
+
+[dependencies]
+cortex-mpu = { path = ".." }
+cortex-m = { version = "0.6.1", features = ["inline-asm"] }
+cortex-m-rt = "0.6.10"
+cortex-m-semihosting = "0.3.5"
+panic-semihosting = "0.5.3"
+stm32l0xx-hal = { version = "0.3.0", features = ["stm32l072"] }

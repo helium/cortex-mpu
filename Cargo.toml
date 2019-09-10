@@ -1,0 +1,19 @@
+[package]
+name = "cortex-mpu"
+version = "0.1.0"
+description = """
+An interface for the Memory Protection Unit (MPU) in Cortex-M microcontrollers
+"""
+authors = ["Jonas Schievink <jonasschievink@gmail.com>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+cortex-m = "0.6.1"
+arrayvec = { version = "0.4.11", default-features = false }
+
+[workspace]
+members = ["demo-*/"]
+
+[profile.dev]
+opt-level = "s"
