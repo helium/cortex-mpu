@@ -7,6 +7,9 @@ An interface for the Memory Protection Unit (MPU) in Cortex-M microcontrollers
 authors = ["Jonas Schievink <jonasschievink@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
+repository = "https://github.com/helium/cortex-mpu"
+keywords = ["memory", "cortex", "arm", "mpu", "mcu"]
+categories = ["embedded", "no-std"]
 
 [dependencies]
 cortex-m = "0.6.1"
