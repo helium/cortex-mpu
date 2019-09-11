@@ -95,11 +95,11 @@ pub mod cortex_m0p {
                             let xn = if region.executable { 0 } else { 1 << 28 };
                             let ap = (region.permissions as u32) << 24;
                             let scb = region.attributes.to_bits() << 16;
-                            // SRD bits are left cleared (all subregions enabled)
+                            let srd = u32::from(region.subregions.bits()) << 8;
                             let size = region.size.to_bits() << 1;
                             let enable = 1;
 
-                            mpu.rasr.write(xn | ap | scb | size | enable);
+                            mpu.rasr.write(xn | ap | scb | srd | size | enable);
                         }
                     }
                 }
@@ -128,6 +128,8 @@ pub mod cortex_m0p {
         pub base_addr: usize,
         /// Size of the region.
         pub size: Size,
+        /// The subregions to enable or disable.
+        pub subregions: Subregions,
         /// Whether to allow instruction fetches from this region.
         ///
         /// If this is `false`, the region will be marked as NX (Never eXecute).
@@ -429,4 +431,39 @@ pub enum AccessPermission {
 
     /// Region unprotected, both reads and writes are allowed.
     ReadWrite = 0b11,
+}
+
+/// Subregion Disable (SRD) bits for the 8 subregions in a region.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Subregions(u8);
+
+impl Subregions {
+    /// All 8 subregions are enabled.
+    pub fn all() -> Self {
+        Subregions(0)
+    }
+
+    /// None of the 8 subregions are enabled. Equivalent to disabling the entire region, which
+    /// should be preferred.
+    pub fn none() -> Self {
+        Subregions(0xff)
+    }
+
+    /// Creates a `Subregions` mask from raw Subregion Disable (SRD) bits.
+    ///
+    /// The least significant bit disables the lowest 1/8th of the region, and so on.
+    pub fn from_disable_bits(bits: u8) -> Self {
+        Subregions(bits)
+    }
+
+    /// Returns the raw 8-bit Subregion Disable Bits value.
+    pub fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+impl Default for Subregions {
+    fn default() -> Self {
+        Self::all()
+    }
 }

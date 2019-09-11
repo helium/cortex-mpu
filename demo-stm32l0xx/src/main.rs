@@ -11,7 +11,7 @@ use cortex_m_rt::{entry, exception, ExceptionFrame};
 use cortex_m_semihosting::hprintln;
 use cortex_mpu::{
     cortex_m0p::{CachePolicy, MemoryAttributes, Mpu, Region, Size},
-    AccessPermission, ArrayVec,
+    AccessPermission, ArrayVec, Subregions,
 };
 use panic_semihosting as _;
 use stm32l0xx_hal as hal;
@@ -51,10 +51,11 @@ fn main() -> ! {
 
     let mut regions = ArrayVec::new();
     let userapp_size = userapp_end() - userapp_start();
-    assert!(userapp_size <= 1024);
+    assert!(userapp_size <= 2048);
     regions.push(Region {
         base_addr: userapp_start(),
         size: Size::S1K,
+        subregions: Subregions::all(),
         executable: true,
         permissions: AccessPermission::ReadWrite,
         attributes: MEMATTR_FLASH,
@@ -62,6 +63,7 @@ fn main() -> ! {
     regions.push(Region {
         base_addr: unsafe { DATA_READONLY.0.as_ptr() as usize },
         size: Size::S256B,
+        subregions: Subregions::all(),
         executable: false,
         permissions: AccessPermission::ReadOnly,
         attributes: MEMATTR_RAM,
@@ -69,6 +71,7 @@ fn main() -> ! {
     regions.push(Region {
         base_addr: unsafe { DATA_NOACCESS.0.as_ptr() as usize },
         size: Size::S256B,
+        subregions: Subregions::from_disable_bits(!0b00000001),
         executable: false,
         permissions: AccessPermission::NoAccess,
         attributes: MEMATTR_RAM,
@@ -132,7 +135,7 @@ enum Test {
     WriteReadOnly,
 }
 
-const TEST: Test = Test::None;
+const TEST: Test = Test::ReadNoAccess;
 
 #[link_section = ".userapp"]
 #[inline(never)]

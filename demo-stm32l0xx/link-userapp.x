@@ -6,11 +6,11 @@ and that we have information about its size.
 */
 
 SECTIONS {
-    .userapp : ALIGN(1024) {
-        . = ALIGN(1024);
+    .userapp : ALIGN(2048) {
+        . = ALIGN(2048);
         __suserapp = .;  // place the __userapp symbol at the current address
         *(.userapp .userapp.*);
-        . = ALIGN(1024);
+        . = ALIGN(2048);
         __euserapp = .;
     } > FLASH AT> FLASH
 }
