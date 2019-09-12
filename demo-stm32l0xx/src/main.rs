@@ -10,8 +10,8 @@ use cortex_m::{
 use cortex_m_rt::{entry, exception, ExceptionFrame};
 use cortex_m_semihosting::hprintln;
 use cortex_mpu::{
-    cortex_m0p::{CachePolicy, MemoryAttributes, Mpu, Region, Size},
-    AccessPermission, ArrayVec, Subregions,
+    cortex_m0p::{CachePolicy, MemoryAttributes, Mpu, Region},
+    AccessPermission, ArrayVec, Size, Subregions,
 };
 use panic_semihosting as _;
 use stm32l0xx_hal as hal;
@@ -55,7 +55,7 @@ fn main() -> ! {
     regions.push(Region {
         base_addr: userapp_start(),
         size: Size::S1K,
-        subregions: Subregions::all(),
+        subregions: Subregions::ALL,
         executable: true,
         permissions: AccessPermission::ReadWrite,
         attributes: MEMATTR_FLASH,
@@ -63,7 +63,7 @@ fn main() -> ! {
     regions.push(Region {
         base_addr: unsafe { DATA_READONLY.0.as_ptr() as usize },
         size: Size::S256B,
-        subregions: Subregions::all(),
+        subregions: Subregions::ALL,
         executable: false,
         permissions: AccessPermission::ReadOnly,
         attributes: MEMATTR_RAM,

@@ -42,6 +42,9 @@ pub mod cortex_m0p {
     pub struct Mpu(MPU);
 
     impl Mpu {
+        /// The smallest supported region size.
+        pub const MIN_REGION_SIZE: Size = Size::from_raw_bits(0b00111);
+
         /// Number of supported memory regions.
         pub const REGION_COUNT: u8 = 8;
 
@@ -96,7 +99,7 @@ pub mod cortex_m0p {
                             let ap = (region.permissions as u32) << 24;
                             let scb = region.attributes.to_bits() << 16;
                             let srd = u32::from(region.subregions.bits()) << 8;
-                            let size = region.size.to_bits() << 1;
+                            let size = u32::from(region.size.bits()) << 1;
                             let enable = 1;
 
                             mpu.rasr.write(xn | ap | scb | srd | size | enable);
@@ -140,30 +143,6 @@ pub mod cortex_m0p {
         pub permissions: AccessPermission,
         /// Memory type and cache policy attributes.
         pub attributes: MemoryAttributes,
-    }
-
-    /// Size of a memory region.
-    ///
-    /// The Cortex-M MPUs only support this very limited number of size classes, and do not allow
-    /// configuring an arbitrary memory region size.
-    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-    pub enum Size {
-        /// 256 Bytes.
-        S256B = 7,
-        /// 1 KiB (1024 Bytes).
-        S1K = 9,
-        /// 1 MiB (1024 KiB, 1048576 Bytes).
-        S1M = 19,
-        /// 1 GiB.
-        S1G = 29,
-        /// 4 GiB (covering the entire memory space).
-        S4G = 31,
-    }
-
-    impl Size {
-        fn to_bits(self) -> u32 {
-            self as u32
-        }
     }
 
     /// Describes memory type, cache policy, and shareability.
@@ -434,20 +413,18 @@ pub enum AccessPermission {
 }
 
 /// Subregion Disable (SRD) bits for the 8 subregions in a region.
+///
+/// Note that some cores do not support subregions for small region sizes. Check the core's User
+/// Guide for more information.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Subregions(u8);
 
 impl Subregions {
-    /// All 8 subregions are enabled.
-    pub fn all() -> Self {
-        Subregions(0)
-    }
+    /// None of the 8 subregions are enabled. Equivalent to disabling the entire region.
+    pub const NONE: Self = Subregions(0xff);
 
-    /// None of the 8 subregions are enabled. Equivalent to disabling the entire region, which
-    /// should be preferred.
-    pub fn none() -> Self {
-        Subregions(0xff)
-    }
+    /// All 8 subregions are enabled.
+    pub const ALL: Self = Subregions(0);
 
     /// Creates a `Subregions` mask from raw Subregion Disable (SRD) bits.
     ///
@@ -462,8 +439,84 @@ impl Subregions {
     }
 }
 
+/// By default, all subregions are enabled.
 impl Default for Subregions {
     fn default() -> Self {
-        Self::all()
+        Self::ALL
+    }
+}
+
+/// Memory region size value (5 bits).
+///
+/// Memory regions must have a size that is a power of two, and their base address must be naturally
+/// aligned (ie. aligned to their size).
+///
+/// There is a core-specific minimum size exposed as `Mpu::MIN_REGION_SIZE`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Size(u8);
+
+impl Size {
+    pub const S256B: Self = Size(7);
+
+    pub const S512B: Self = Size(8);
+
+    pub const S1K: Self = Size(9);
+
+    pub const S2K: Self = Size(10);
+
+    pub const S4K: Self = Size(11);
+
+    pub const S8K: Self = Size(12);
+
+    pub const S16K: Self = Size(13);
+
+    pub const S32K: Self = Size(14);
+
+    pub const S64K: Self = Size(15);
+
+    pub const S128K: Self = Size(16);
+
+    pub const S256K: Self = Size(17);
+
+    pub const S512K: Self = Size(18);
+
+    pub const S1M: Self = Size(19);
+
+    pub const S2M: Self = Size(20);
+
+    pub const S4M: Self = Size(21);
+
+    pub const S8M: Self = Size(22);
+
+    pub const S16M: Self = Size(23);
+
+    pub const S32M: Self = Size(24);
+
+    pub const S64M: Self = Size(25);
+
+    pub const S128M: Self = Size(26);
+
+    pub const S256M: Self = Size(27);
+
+    pub const S512M: Self = Size(28);
+
+    pub const S1G: Self = Size(29);
+
+    pub const S2G: Self = Size(30);
+
+    /// The entire 4 GiB memory space.
+    pub const S4G: Self = Size(31);
+
+    /// Creates a `Size` from a raw 5-bit value.
+    ///
+    /// The `bits` encode a region size of `2^(bits + 1)`. For example, a 1 KiB region would use
+    /// `0b01001` (9): `2^(9+1) = 2^10 = 1024`.
+    pub const fn from_raw_bits(bits: u8) -> Self {
+        Size(bits)
+    }
+
+    /// Returns the raw 5-bit value encoding the region size.
+    pub const fn bits(self) -> u8 {
+        self.0
     }
 }
