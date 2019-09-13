@@ -43,7 +43,7 @@ pub mod cortex_m0p {
 
     impl Mpu {
         /// The smallest supported region size.
-        pub const MIN_REGION_SIZE: Size = Size::from_raw_bits(0b00111);
+        pub const MIN_REGION_SIZE: Size = Size::S256B;
 
         /// Number of supported memory regions.
         pub const REGION_COUNT: u8 = 8;
@@ -210,6 +210,9 @@ pub mod cortex_m4 {
     pub struct Mpu(MPU);
 
     impl Mpu {
+        /// The smallest supported region size.
+        pub const MIN_REGION_SIZE: Size = Size::S32B;
+
         /// Number of supported memory regions.
         pub const REGION_COUNT: u8 = 8;
 
@@ -256,7 +259,7 @@ pub mod cortex_m4 {
                             let ap = (region.permissions as u32) << 24;
                             let texscb = region.attributes.to_bits() << 16;
                             // SRD bits are left cleared (all subregions enabled)
-                            let size = region.size.to_bits() << 1;
+                            let size = u32::from(region.size.bits()) << 1;
                             let enable = 1;
 
                             mpu.rasr.write(xn | ap | texscb | size | enable);
@@ -298,30 +301,6 @@ pub mod cortex_m4 {
         pub permissions: AccessPermission,
         /// Memory type and cache policy attributes.
         pub attributes: MemoryAttributes,
-    }
-
-    /// Size of a memory region.
-    ///
-    /// The Cortex-M MPUs only support this very limited number of size classes, and do not allow
-    /// configuring an arbitrary memory region size.
-    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-    pub enum Size {
-        /// 32 Bytes.
-        S32B = 4,
-        /// 1 KiB (1024 Bytes).
-        S1K = 9,
-        /// 1 MiB (1024 KiB, 1048576 Bytes).
-        S1M = 19,
-        /// 1 GiB.
-        S1G = 29,
-        /// 4 GiB (covering the entire memory space).
-        S4G = 31,
-    }
-
-    impl Size {
-        fn to_bits(self) -> u32 {
-            self as u32
-        }
     }
 
     /// Describes memory type, cache policy, and shareability.
@@ -456,6 +435,12 @@ impl Default for Subregions {
 pub struct Size(u8);
 
 impl Size {
+    pub const S32B: Self = Size(4);
+
+    pub const S64B: Self = Size(5);
+
+    pub const S128B: Self = Size(6);
+
     pub const S256B: Self = Size(7);
 
     pub const S512B: Self = Size(8);
