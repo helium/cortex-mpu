@@ -258,11 +258,11 @@ pub mod cortex_m4 {
                             let xn = if region.executable { 0 } else { 1 << 28 };
                             let ap = (region.permissions as u32) << 24;
                             let texscb = region.attributes.to_bits() << 16;
-                            // SRD bits are left cleared (all subregions enabled)
+                            let srd = u32::from(region.subregions.bits()) << 8;
                             let size = u32::from(region.size.bits()) << 1;
                             let enable = 1;
 
-                            mpu.rasr.write(xn | ap | texscb | size | enable);
+                            mpu.rasr.write(xn | ap | texscb | srd | size | enable);
                         }
                     }
                 }
@@ -291,6 +291,8 @@ pub mod cortex_m4 {
         pub base_addr: usize,
         /// Size of the region.
         pub size: Size,
+        /// The subregions to enable or disable.
+        pub subregions: Subregions,
         /// Whether to allow instruction fetches from this region.
         ///
         /// If this is `false`, the region will be marked as NX (Never eXecute).
