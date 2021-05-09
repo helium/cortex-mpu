@@ -36,7 +36,7 @@ fn update_mpu_unprivileged(mpu: &mut MPU, f: impl FnOnce(&mut MPU)) {
     asm::isb();
 }
 
-unsafe fn update_mpu_privileged(mpu: &mut MPU, f: impl FnOnce(&mut MPU)) {
+fn update_mpu(mpu: &mut MPU, f: impl FnOnce(&mut MPU)) {
     // Atomic MPU updates:
     // Turn off interrupts, turn off MPU, reconfigure, turn it back on, reenable interrupts.
     // https://developer.arm.com/docs/dui0553/latest/cortex-m4-peripherals/optional-memory-protection-unit/updating-an-mpu-region
@@ -308,11 +308,15 @@ pub mod cortex_m4 {
 
         /// Configures the MPU to restrict access to software running in both privileged and
         /// unprivileged modes
-        pub unsafe fn configure_privileged(
+        ///
+        /// The changes take effect immediately on the code that called this function. If the
+        /// code being executed ends up not readable or not executable, a memory management fault
+        /// will occur.
+        pub fn configure(
             &mut self,
             regions: &ArrayVec<[Region<FullAccessPermissions>; Self::REGION_COUNT_USIZE]>,
         ) {
-            update_mpu_privileged(&mut self.0, |mpu| {
+            update_mpu(&mut self.0, |mpu| {
                 for (i, region) in regions.iter().enumerate() {
                     unsafe {
                         {
