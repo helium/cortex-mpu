@@ -3,12 +3,14 @@
 use cortex_m::{asm, peripheral::MPU};
 
 pub use arrayvec::ArrayVec;
+/// Enable bit in MPU_CTRL
+const CTRL_ENABLE: u32 = 1 << 0;
+/// Enable for hard fault and non-maskable interrupt bit in MPU_CTRL
+const _CTRL_HFNMIENA: u32 = 1 << 1;
+/// Default memory map for privileged mode bit in MPU_CTRL
+const CTRL_PRIVDEFENA: u32 = 1 << 2;
 
 fn update_mpu_unprivileged(mpu: &mut MPU, f: impl FnOnce(&mut MPU)) {
-    const CTRL_ENABLE: u32 = 1 << 0;
-    const _CTRL_HFNMIENA: u32 = 1 << 1;
-    const CTRL_PRIVDEFENA: u32 = 1 << 2;
-
     // Atomic MPU updates:
     // Turn off interrupts, turn off MPU, reconfigure, turn it back on, reenable interrupts.
     // Turning off interrupts is not needed when the old configuration only applied to
@@ -29,6 +31,29 @@ fn update_mpu_unprivileged(mpu: &mut MPU, f: impl FnOnce(&mut MPU)) {
         // Enable MPU, but not for privileged code
         mpu.ctrl.write(CTRL_ENABLE | CTRL_PRIVDEFENA);
     }
+
+    asm::dsb();
+    asm::isb();
+}
+
+unsafe fn update_mpu_privileged(mpu: &mut MPU, f: impl FnOnce(&mut MPU)) {
+    // Atomic MPU updates:
+    // Turn off interrupts, turn off MPU, reconfigure, turn it back on, reenable interrupts.
+    // https://developer.arm.com/docs/dui0553/latest/cortex-m4-peripherals/optional-memory-protection-unit/updating-an-mpu-region
+    asm::dsb();
+    cortex_m::interrupt::free(|_| {
+        // Disable MPU while we update the regions
+        unsafe {
+            mpu.ctrl.write(0);
+        }
+
+        f(mpu);
+
+        unsafe {
+            // Enable MPU for privileged and unprivileged code
+            mpu.ctrl.write(CTRL_ENABLE);
+        }
+    });
 
     asm::dsb();
     asm::isb();
@@ -280,11 +305,54 @@ pub mod cortex_m4 {
                 }
             });
         }
+
+        /// Configures the MPU to restrict access to software running in both privileged and
+        /// unprivileged modes
+        pub unsafe fn configure_privileged(
+            &mut self,
+            regions: &ArrayVec<[Region<FullAccessPermissions>; Self::REGION_COUNT_USIZE]>,
+        ) {
+            update_mpu_privileged(&mut self.0, |mpu| {
+                for (i, region) in regions.iter().enumerate() {
+                    unsafe {
+                        {
+                            let addr = (region.base_addr as u32) & !0b11111;
+                            let valid = 1 << 4;
+                            let region = i as u32;
+                            mpu.rbar.write(addr | valid | region);
+                        }
+
+                        {
+                            let xn = if region.executable { 0 } else { 1 << 28 };
+                            let ap = (region.permissions as u32) << 24;
+                            let texscb = region.attributes.to_bits() << 16;
+                            let srd = u32::from(region.subregions.bits()) << 8;
+                            let size = u32::from(region.size.bits()) << 1;
+                            let enable = 1;
+
+                            mpu.rasr.write(xn | ap | texscb | srd | size | enable);
+                        }
+                    }
+                }
+
+                // Disable the remaining regions
+                for i in regions.len()..usize::from(Self::REGION_COUNT) {
+                    unsafe {
+                        let addr = 0;
+                        let valid = 1 << 4;
+                        let region = i as u32;
+                        mpu.rbar.write(addr | valid | region);
+
+                        mpu.rasr.write(0); // disable region
+                    }
+                }
+            });
+        }
     }
 
     /// Memory region properties.
     #[derive(Debug, Copy, Clone)]
-    pub struct Region {
+    pub struct Region<P = AccessPermission> {
         /// Starting address of the region (lowest address).
         ///
         /// This must be aligned to the region's `size`.
@@ -300,7 +368,7 @@ pub mod cortex_m4 {
         /// other MPU settings.
         pub executable: bool,
         /// Data access permissions for the region.
-        pub permissions: AccessPermission,
+        pub permissions: P,
         /// Memory type and cache policy attributes.
         pub attributes: MemoryAttributes,
     }
@@ -391,6 +459,22 @@ pub enum AccessPermission {
 
     /// Region unprotected, both reads and writes are allowed.
     ReadWrite = 0b11,
+}
+
+/// Data access permissions for privileged and unprivileged modes
+pub enum FullAccessPermissions {
+    /// Any access generates a permission fault
+    PrivilegedNoAccessUnprivilegedNoAccess = 0b000,
+    /// Privileged access only
+    PrivilegedReadWriteUnprivilegedNoAccess = 0b001,
+    /// Any unprivileged write generates a permission fault
+    PrivilegedReadWriteUnprivilegedReadOnly = 0b010,
+    /// Full access
+    PrivilegedReadWriteUnprivilegedReadWrite = 0b011,
+    /// Privileged read-only
+    PrivilegedReadOnlyUnprivilegedNoAccess = 0b101,
+    /// Privileged or unprivileged read-only
+    PrivilegedReadOnlyUnprivilegedReadOnly = 0b110,
 }
 
 /// Subregion Disable (SRD) bits for the 8 subregions in a region.
