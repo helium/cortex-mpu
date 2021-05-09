@@ -145,11 +145,59 @@ pub mod cortex_m0p {
                 }
             });
         }
+
+        /// Configures the MPU to restrict access to software running in both privileged and
+        /// unprivileged modes.
+        ///
+        /// Any violation of the MPU settings will cause a *HardFault* exception. The Cortex-M0+
+        /// does not have a dedicated memory management exception.
+        ///
+        /// Code will only be allowed to access memory inside one of the given `regions`.
+        pub fn configure(
+            &mut self,
+            regions: &ArrayVec<[Region<FullAccessPermissions>; Self::REGION_COUNT_USIZE]>,
+        ) {
+            update_mpu(&mut self.0, |mpu| {
+                for (i, region) in regions.iter().enumerate() {
+                    unsafe {
+                        {
+                            let addr = (region.base_addr as u32) & !0b11111;
+                            let valid = 1 << 4;
+                            let region = i as u32;
+                            mpu.rbar.write(addr | valid | region);
+                        }
+
+                        {
+                            let xn = if region.executable { 0 } else { 1 << 28 };
+                            let ap = (region.permissions as u32) << 24;
+                            let scb = region.attributes.to_bits() << 16;
+                            let srd = u32::from(region.subregions.bits()) << 8;
+                            let size = u32::from(region.size.bits()) << 1;
+                            let enable = 1;
+
+                            mpu.rasr.write(xn | ap | scb | srd | size | enable);
+                        }
+                    }
+                }
+
+                // Disable the remaining regions
+                for i in regions.len()..usize::from(Self::REGION_COUNT) {
+                    unsafe {
+                        let addr = 0;
+                        let valid = 1 << 4;
+                        let region = i as u32;
+                        mpu.rbar.write(addr | valid | region);
+
+                        mpu.rasr.write(0); // disable region
+                    }
+                }
+            });
+        }
     }
 
     /// Memory region properties.
     #[derive(Debug, Copy, Clone)]
-    pub struct Region {
+    pub struct Region<P = AccessPermission> {
         /// Starting address of the region (lowest address).
         ///
         /// This must be aligned to the region's `size`.
@@ -165,7 +213,7 @@ pub mod cortex_m0p {
         /// other MPU settings.
         pub executable: bool,
         /// Data access permissions for the region.
-        pub permissions: AccessPermission,
+        pub permissions: P,
         /// Memory type and cache policy attributes.
         pub attributes: MemoryAttributes,
     }
@@ -309,8 +357,11 @@ pub mod cortex_m4 {
         /// Configures the MPU to restrict access to software running in both privileged and
         /// unprivileged modes
         ///
+        /// This function disables the default memory map, so any areas of the address space that
+        /// are not covered by regions will not be accessible.
+        ///
         /// The changes take effect immediately on the code that called this function. If the
-        /// code being executed ends up not readable or not executable, a memory management fault
+        /// code being executed ends up not readable or not executable, a MemManage fault
         /// will occur.
         pub fn configure(
             &mut self,
