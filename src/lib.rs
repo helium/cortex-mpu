@@ -462,6 +462,7 @@ pub enum AccessPermission {
 }
 
 /// Data access permissions for privileged and unprivileged modes
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FullAccessPermissions {
     /// Any access generates a permission fault
     PrivilegedNoAccessUnprivilegedNoAccess = 0b000,
